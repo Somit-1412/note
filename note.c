@@ -1,158 +1,137 @@
-#include<stdio.h>
+#include<unistd.h>
 #include<string.h>
-#include<stdlib.h>
-#include<ctype.h>
+#include<fcntl.h>
+#include<stdio.h>
+
+void display_usage(){
+	write(1,"Usage:\n",7);
+	write(1,"1.note text...\n",15);
+	write(1,"2.note -l\n",10);
+	write(1,"3.note -c\n",10);
+	write(1,"4.note -d n\n",12);
+	write(1,"5.note --help\n",14);
+	return;
+}
 
 int main(int argc, char *argv[]){
-	char path[200];
-	snprintf(path,sizeof(path),"%s/.notes",getenv("HOME"));
-	int counter=1;
-	FILE *f;
-	char line[200];
-	int i;
-	
-	if (argc < 2) {
-    		printf("Usage:\n");
-		printf("	note text...\n");
-		printf("	note -l:	List saved notes\n");
-		printf("	note -c:	Clear notes\n");
-		printf("	note -d n:	Delete nth note\n");
+	int fd;
+	char buff[64];
+	if(argc<2){
+		display_usage();
 		return 0;
 	}
 
-
-	//commands
-	//if user types: note --help
-	if(argc == 2 && strcmp(argv[1],"--help") == 0){
-		printf("Usage:\n");
-		printf("	note text...\n");
-		printf("	note -l:	List saved notes\n");
-		printf("	note -c:	Clear notes\n");
-		printf("	note -d n:	Delete nth note\n");
-		return 0;
-	}
-
-	//if user types: note -l
-	else if(argc == 2 && strcmp(argv[1],"-l") == 0){
-		f = fopen(path,"r");
-		if(f == NULL){
-			printf("No notes yet\n");
+	//list notes
+	if(argc==2 && strcmp(argv[1],"-l")==0){
+		fd=open(".notes",O_RDONLY);
+		if(fd<0){
+			write(1,"No notes yet\n",13);
 			return 0;
 		}
+		int at_line_start=1;
+		int line=1;
+		ssize_t n;
+		while((n=read(fd,buff,sizeof(buff)))>0){
+		for(ssize_t i=0;i<n;i++){
+		if(at_line_start){
+		char num[16];
+		char temp[16];
 
-		while(fgets(line,200,f) != NULL){
-			printf("%d. %s",counter,line);
-			counter++;
+		int t=0;
+		int len=0;
+
+		int x=line;
+		while(x>0){
+			temp[t++]='0'+ (x%10);
+			x/=10;
+		}
+		for(int j=t-1;j>=0;j--){
+			num[len++]=temp[j];
+		}
+		num[len++]='.';
+		num[len++]=' ';
+		//num here is character array of line number, write() only prints characters
+
+		write(1,num,len);
+		at_line_start=0;
 		}
 
-		fclose(f);
+		write(1,&buff[i],1);
+		if(buff[i]=='\n'){
+			at_line_start=1;
+			line++;
+		}
+		}
+		}
+	return 0;
+	}
+
+	//clear .notes
+	if(argc==2 && strcmp(argv[1],"-c")==0){
+		fd=open(".notes",O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		close(fd);
 		return 0;
 	}
 
-	//if user types: note -c
-	else if(argc == 2 && strcmp(argv[1],"-c") == 0){
-		char choice[10];
-		while(1){
-			printf("Clear notes?[y/n]: ");
-			fflush(stdout);
-
-			if(fgets(choice,sizeof(choice),stdin) == NULL){
-				return 0;
-				}
-
-			//remove newline
-			choice[strcspn(choice,"\n")] = '\0';
-
-			//convert to lower case
-			for(int i=0;choice[i];i++){
-				choice[i] = tolower((unsigned char)choice[i]);
-				}
-
-			if(strcmp(choice,"y") == 0 || strcmp(choice,"yes") == 0){
-				f = fopen(path,"w");
-				fclose(f);
-				return 0;
-				}
-
-			if(strcmp(choice,"n") == 0 || strcmp(choice,"no") == 0){
-				return 0;
-				}
-			printf("Enter [y/n]: ");
-			fflush(stdout);
-		}
+	//display usage
+	if(argc==2 && strcmp(argv[1],"--help")==0){
+		display_usage();
+		return 0;
 	}
 
-	//if user types: note -d n
-	else if(argc == 3 && strcmp(argv[1],"-d") == 0){
-		int target = atoi(argv[2]);
-		if(target <= 0){
-			printf("Invalid.\n");
+	//delete specific note
+	if(argc==3 && strcmp(argv[1],"-d")==0){
+
+		fd=open(".notes",O_RDONLY);
+		int fd1=open(".temp",O_WRONLY | O_CREAT, 0644);
+		if(fd<0 || fd1<0){
+			write(1,"Error\n",6);
 			return 1;
 		}
-
-		FILE *input = fopen(path,"r");
-		if(input == NULL){
-			printf("Notes empty.\n");
-			return 1;
+		int deleted=0;
+		//convert argv[2] into integer
+		int value=0;
+		char *s=argv[2];
+		while(*s){
+			if(*s<'0' || *s>'9') return -1;
+			value=value*10 + (*s-'0');
+			s++;
 		}
 
-		char temp_path[220];
-		snprintf(temp_path,sizeof(temp_path),"%s.tmp",path);
-
-		FILE *output = fopen(temp_path,"w");
-		if(output == NULL){
-			printf("Error.");
-			fclose(input);
-			return 1;
-		}
-
-		char buffer[200];
-		int line_number = 1;
-		int deleted = 0;
-
-		while(fgets(buffer,sizeof(buffer),input)){
-			if(line_number != target){
-				fputs(buffer,output);
-			} else {
-				deleted = 1;
+		int line_no=1;
+		ssize_t n;
+		while((n=read(fd,buff,sizeof(buff)))>0){
+			for(int k=0;k<n;k++){
+				if(line_no!=value){
+					write(fd1,&buff[k],1);
+				} else { deleted=1; }
+				if(buff[k]=='\n') line_no++;
 			}
-			line_number++;
 		}
-		fclose(input);
-		fclose(output);
-
 		if(!deleted){
-			remove(temp_path);
-			printf("No such note.\n");
-			return 1;
+			write(1,"No such note\n",13);
+			remove(".temp");
+			return 0;
 		}
-
-		rename(temp_path,path);
-		return 0;
-
-	}
-
-	//handle unknown flags
-	else if(argv[1][0] == '-'){
-		printf("Unknown option: %s\n",argv[1]);
-		return 1;
-	}
-
-	//if user types: note some text
-	else {
-		f = fopen(path,"a");
-		if(f == NULL){
-			printf("Error opening file\n");
-			return 1;
-		}
-
-		for(i=1;i<argc;i++){
-			fprintf(f,"%s ",argv[i]);
-		}
-		fprintf(f,"\n");
-		fclose(f);
+		rename(".temp",".notes");
+		close(fd);
+		close(fd1);
 		return 0;
 	}
 
+	//add note
+	if(argc>1){
+	fd=open(".notes",O_WRONLY | O_CREAT | O_APPEND, 0644);
+
+	if(fd<0) return 1;
+
+	for(int i=1;i<argc;i++){
+		write(fd,argv[i],strlen(argv[i]));
+		write(fd," ",1);
+	}
+	write(fd,"\n",1);
+
+	}
+	close(fd);
 	return 0;
 }

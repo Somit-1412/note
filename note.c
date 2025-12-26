@@ -2,6 +2,7 @@
 #include<string.h>
 #include<fcntl.h>
 #include<stdio.h>
+#include<stdlib.h>
 
 void display_usage(){
 	write(1,"Usage:\n",7);
@@ -14,6 +15,12 @@ void display_usage(){
 }
 
 int main(int argc, char *argv[]){
+	//set up absolute paths 
+	char path[32];
+	char temp_path[32];
+	snprintf(path,sizeof(path),"%s/.notes",getenv("HOME"));
+	snprintf(temp_path,sizeof(temp_path),"%s/.temp",getenv("HOME"));
+
 	int fd;
 	char buff[64];
 	if(argc<2){
@@ -23,7 +30,7 @@ int main(int argc, char *argv[]){
 
 	//list notes
 	if(argc==2 && strcmp(argv[1],"-l")==0){
-		fd=open(".notes",O_RDONLY);
+		fd=open(path,O_RDONLY);
 		if(fd<0){
 			write(1,"No notes yet\n",13);
 			return 0;
@@ -68,7 +75,7 @@ int main(int argc, char *argv[]){
 
 	//clear .notes
 	if(argc==2 && strcmp(argv[1],"-c")==0){
-		fd=open(".notes",O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		fd=open(path,O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		close(fd);
 		return 0;
 	}
@@ -82,8 +89,8 @@ int main(int argc, char *argv[]){
 	//delete specific note
 	if(argc==3 && strcmp(argv[1],"-d")==0){
 
-		fd=open(".notes",O_RDONLY);
-		int fd1=open(".temp",O_WRONLY | O_CREAT, 0644);
+		fd=open(path,O_RDONLY);
+		int fd1=open(temp_path,O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if(fd<0 || fd1<0){
 			write(1,"Error\n",6);
 			return 1;
@@ -110,10 +117,10 @@ int main(int argc, char *argv[]){
 		}
 		if(!deleted){
 			write(1,"No such note\n",13);
-			remove(".temp");
+			remove(temp_path);
 			return 0;
 		}
-		rename(".temp",".notes");
+		rename(temp_path,path);
 		close(fd);
 		close(fd1);
 		return 0;
@@ -121,7 +128,7 @@ int main(int argc, char *argv[]){
 
 	//add note
 	if(argc>1){
-	fd=open(".notes",O_WRONLY | O_CREAT | O_APPEND, 0644);
+	fd=open(path,O_WRONLY | O_CREAT | O_APPEND, 0644);
 
 	if(fd<0) return 1;
 

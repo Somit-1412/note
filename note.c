@@ -3,6 +3,7 @@
 #include<fcntl.h>
 #include<stdio.h>
 #include<stdlib.h>
+#include<errno.h>
 
 void display_usage(){
 	write(1,"Usage:\n",7);
@@ -16,8 +17,14 @@ void display_usage(){
 
 int main(int argc, char *argv[]){
 	//set up absolute paths 
-	char path[32];
-	char temp_path[32];
+	char path[256];
+	char temp_path[256];
+
+	if(getenv("HOME")==NULL){
+	write(2,"HOME not set\n",13);
+	return 1;
+	}
+
 	snprintf(path,sizeof(path),"%s/.notes",getenv("HOME"));
 	snprintf(temp_path,sizeof(temp_path),"%s/.temp",getenv("HOME"));
 
@@ -32,43 +39,50 @@ int main(int argc, char *argv[]){
 	if(argc==2 && strcmp(argv[1],"-l")==0){
 		fd=open(path,O_RDONLY);
 		if(fd<0){
-			write(1,"No notes yet\n",13);
-			return 0;
+			if(errno==ENOENT){
+				write(1,"No notes yet\n",13);
+				return 0;
+			} else {
+				write(2,"note: ",6);
+				write(2,strerror(errno),strlen(strerror(errno)));
+				write(2,"\n",1);
+				return 1;
+			}
 		}
 		int at_line_start=1;
 		int line=1;
 		ssize_t n;
 		while((n=read(fd,buff,sizeof(buff)))>0){
-		for(ssize_t i=0;i<n;i++){
-		if(at_line_start){
-		char num[16];
-		char temp[16];
+			for(ssize_t i=0;i<n;i++){
+				if(at_line_start){
+					char num[16];
+					char temp[16];
 
-		int t=0;
-		int len=0;
+					int t=0;
+					int len=0;
 
-		int x=line;
-		while(x>0){
-			temp[t++]='0'+ (x%10);
-			x/=10;
-		}
-		for(int j=t-1;j>=0;j--){
-			num[len++]=temp[j];
-		}
-		num[len++]='.';
-		num[len++]=' ';
-		//num here is character array of line number, write() only prints characters
+					int x=line;
+					while(x>0){
+						temp[t++]='0'+ (x%10);
+						x/=10;
+					}
+					for(int j=t-1;j>=0;j--){
+						num[len++]=temp[j];
+					}
+					num[len++]='.';
+					num[len++]=' ';
+					//num here is character array of line number, write() only prints characters
 
-		write(1,num,len);
-		at_line_start=0;
-		}
+					write(1,num,len);
+					at_line_start=0;
+				}
 
-		write(1,&buff[i],1);
-		if(buff[i]=='\n'){
-			at_line_start=1;
-			line++;
-		}
-		}
+				write(1,&buff[i],1);
+				if(buff[i]=='\n'){
+					at_line_start=1;
+					line++;
+				}
+			}
 		}
 	return 0;
 	}
@@ -92,7 +106,9 @@ int main(int argc, char *argv[]){
 		fd=open(path,O_RDONLY);
 		int fd1=open(temp_path,O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if(fd<0 || fd1<0){
-			write(1,"Error\n",6);
+			write(2,"note :",6);
+			write(2,strerror(errno),strlen(strerror(errno)));
+			write(2,"\n",1);
 			return 1;
 		}
 		int deleted=0;
@@ -120,7 +136,14 @@ int main(int argc, char *argv[]){
 			remove(temp_path);
 			return 0;
 		}
-		rename(temp_path,path);
+
+		if(rename(temp_path,path)<0){
+		write(2,"note: ",6);
+		write(2,strerror(errno),strlen(strerror(errno)));
+		write(2,"\n",1);
+		return 1;
+		}
+
 		close(fd);
 		close(fd1);
 		return 0;
@@ -130,7 +153,12 @@ int main(int argc, char *argv[]){
 	if(argc>1){
 	fd=open(path,O_WRONLY | O_CREAT | O_APPEND, 0644);
 
-	if(fd<0) return 1;
+	if(fd<0){
+		write(2,"note: ",6);
+		write(2,strerror(errno),strlen(strerror(errno)));
+		write(2,"\n",1);
+		return 1;
+	}
 
 	for(int i=1;i<argc;i++){
 		write(fd,argv[i],strlen(argv[i]));

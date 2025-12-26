@@ -33,6 +33,7 @@ int main(int argc, char *argv[]){
 
 	// stdin mode: each line = one note
 	if (argc == 1) {
+	    int interactive=isatty(0);
 	    ssize_t n;
 	    fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
 	    if (fd < 0) {
@@ -44,6 +45,10 @@ int main(int argc, char *argv[]){
 
 	    char linebuf[256];
 	    int pos = 0;
+
+	if (interactive) {
+        	write(1, "Enter notes (Ctrl-D to finish):\n", 32);
+    	}
 
 	    while ((n = read(0, buff, sizeof(buff))) > 0) {
 		for (ssize_t i = 0; i < n; i++) {

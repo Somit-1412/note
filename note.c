@@ -16,7 +16,7 @@ void display_usage(){
 }
 
 int main(int argc, char *argv[]){
-	//set up absolute paths 
+	//set up absolute paths
 	char path[256];
 	char temp_path[256];
 
@@ -29,11 +29,54 @@ int main(int argc, char *argv[]){
 	snprintf(temp_path,sizeof(temp_path),"%s/.temp",getenv("HOME"));
 
 	int fd;
-	char buff[64];
-	if(argc<2){
-		display_usage();
-		return 0;
+	char buff[256];
+
+	// stdin mode: each line = one note
+	if (argc == 1) {
+	    ssize_t n;
+	    fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+	    if (fd < 0) {
+		write(2, "note: ", 6);
+		write(2, strerror(errno), strlen(strerror(errno)));
+		write(2, "\n", 1);
+		return 1;
+	    }
+
+	    char linebuf[256];
+	    int pos = 0;
+
+	    while ((n = read(0, buff, sizeof(buff))) > 0) {
+		for (ssize_t i = 0; i < n; i++) {
+		    if (buff[i] == '\n') {
+		        if (pos > 0) {
+		            write(fd, linebuf, pos);
+		            write(fd, "\n", 1);
+		            pos = 0;
+		        }
+		    } else {
+		        if (pos < (int)sizeof(linebuf) - 1) {
+		            linebuf[pos++] = buff[i];
+		        }
+		    }
+		}
+	    }
+
+		//flush buffered data on EOF
+		if(pos>0){
+			write(fd,linebuf,pos);
+			write(fd,"\n",1);
+		}
+
+	    if (n < 0) {
+		write(2, "note: ", 6);
+		write(2, strerror(errno), strlen(strerror(errno)));
+		write(2, "\n", 1);
+	    }
+
+	    close(fd);
+	    return 0;
 	}
+
 
 	//list notes
 	if(argc==2 && strcmp(argv[1],"-l")==0){
@@ -87,20 +130,20 @@ int main(int argc, char *argv[]){
 	return 0;
 	}
 
-	//clear .notes
+	//clear .notes (-c)
 	if(argc==2 && strcmp(argv[1],"-c")==0){
 		fd=open(path,O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		close(fd);
 		return 0;
 	}
 
-	//display usage
+	//display usage (--help)
 	if(argc==2 && strcmp(argv[1],"--help")==0){
 		display_usage();
 		return 0;
 	}
 
-	//delete specific note
+	//delete specific note (-d n)
 	if(argc==3 && strcmp(argv[1],"-d")==0){
 
 		fd=open(path,O_RDONLY);
@@ -148,6 +191,7 @@ int main(int argc, char *argv[]){
 		close(fd1);
 		return 0;
 	}
+
 
 	//add note
 	if(argc>1){
